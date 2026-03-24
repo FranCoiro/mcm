@@ -128,6 +128,32 @@
   .legend-dot { width:12px; height:12px; border-radius:4px; }
 
   .error-msg { color:var(--c1); font-size:0.85rem; font-weight:700; margin-top:0.5rem; }
+
+  /* HISTORY */
+  .history-panel { display:none; background:var(--surface); border-radius:var(--radius); padding:1.4rem; margin-top:1.4rem; box-shadow:0 4px 20px rgba(45,45,94,0.08); border:2px solid var(--border); }
+  .history-panel.visible { display:block; animation:fadeUp 0.4s ease; }
+  .history-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.6rem; margin-bottom:1rem; }
+  .history-title { font-size:0.85rem; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); display:flex; align-items:center; gap:0.4rem; }
+  .history-count { background:var(--c4); color:#fff; font-size:0.75rem; font-weight:900; border-radius:50px; padding:2px 10px; }
+  .btn-clear-history { background:transparent; border:2px solid var(--border); color:var(--muted); border-radius:50px; padding:4px 14px; font-size:0.78rem; font-weight:800; font-family:'Nunito',sans-serif; cursor:pointer; transition:all 0.15s; }
+  .btn-clear-history:hover { border-color:var(--c1); color:var(--c1); }
+  .history-list { display:flex; flex-direction:column; gap:0.7rem; max-height:420px; overflow-y:auto; padding-right:2px; }
+  .history-list::-webkit-scrollbar { width:5px; }
+  .history-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:5px; }
+  .history-item { background:var(--bg); border:2px solid var(--border); border-radius:var(--radius-sm); padding:0.9rem 1.1rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap; animation:fadeUp 0.35s ease; transition:border-color 0.2s; }
+  .history-item:hover { border-color:var(--c4); }
+  .history-num { font-size:0.72rem; font-weight:900; color:var(--muted); min-width:22px; }
+  .history-nums { display:flex; gap:0.3rem; align-items:center; flex-wrap:wrap; }
+  .history-num-tag { font-size:0.85rem; font-weight:900; padding:2px 10px; border-radius:6px; color:#fff; }
+  .history-arrow { color:var(--muted); font-size:0.9rem; }
+  .history-mcm-box { background:linear-gradient(135deg,#fff8ed,#ffecd1); border:2px solid var(--mcm); border-radius:8px; padding:4px 14px; text-align:center; }
+  .history-mcm-label { font-size:0.62rem; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; }
+  .history-mcm-val { font-size:1.3rem; font-weight:900; color:var(--mcm); line-height:1.1; }
+  .history-commons { display:flex; flex-wrap:wrap; gap:0.3rem; flex:1; min-width:120px; }
+  .history-common-chip { font-size:0.78rem; font-weight:800; padding:2px 9px; background:#e0faf8; border:1.5px solid var(--common); color:#0d7a72; border-radius:6px; }
+  .history-more { font-size:0.72rem; font-weight:700; color:var(--muted); align-self:center; }
+  .history-item-del { background:transparent; border:none; color:#ccc; font-size:0.85rem; cursor:pointer; padding:2px 5px; border-radius:50%; transition:all 0.15s; margin-left:auto; }
+  .history-item-del:hover { background:#ffe0e0; color:var(--c1); }
   .divider { border:none; border-top:2px dashed var(--border); margin:1rem 0; }
 
   @media(max-width:480px) {
@@ -201,11 +227,21 @@
   </div>
 </div>
 
+<!-- HISTORY -->
+<div class="history-panel" id="history-panel">
+  <div class="history-header">
+    <div class="history-title">📚 Historial de ejercicios <span class="history-count" id="history-count">0</span></div>
+    <button class="btn-clear-history" onclick="clearHistory()">🗑 Borrar todo</button>
+  </div>
+  <div class="history-list" id="history-list"></div>
+</div>
+
 <script>
 let numbers = [4, 6];
 let limit = 20;
 let steps = [];
 let currentStep = -1;
+let history = [];   // historial de ejercicios completados
 
 const COLORS   = ['#ff5f87','#ff9f1c','#2ec4b6','#9b5de5','#0077b6','#e05c1a'];
 const BG_LIGHT = ['#fff0f3','#fff8ed','#e8faf9','#f5eeff','#e8f4ff','#fff3ee'];
@@ -380,6 +416,62 @@ function showResult() {
   const panel=document.getElementById('result-panel');
   panel.classList.add('visible');
   setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'start'}),100);
+
+  // Guardar en historial
+  saveToHistory([...numbers], mcm, commons);
+}
+
+function saveToHistory(nums, mcm, commons) {
+  // Evitar duplicados consecutivos exactos
+  if (history.length > 0) {
+    const last = history[0];
+    if (last.mcm === mcm && last.nums.join(',') === nums.join(',')) return;
+  }
+  history.unshift({ nums, mcm, commons, id: Date.now() });
+  renderHistory();
+}
+
+function renderHistory() {
+  const panel = document.getElementById('history-panel');
+  const listEl = document.getElementById('history-list');
+  const countEl = document.getElementById('history-count');
+
+  if (history.length === 0) { panel.classList.remove('visible'); return; }
+  panel.classList.add('visible');
+  countEl.textContent = history.length;
+
+  listEl.innerHTML = history.map((item, i) => {
+    const numTags = item.nums.map((n, ni) =>
+      `<span class="history-num-tag" style="background:${COLORS[ni%COLORS.length]}">${n}</span>`
+    ).join('');
+    const commonChips = item.commons.slice(0, 8).map(c =>
+      `<span class="history-common-chip">${c}</span>`
+    ).join('');
+    const more = item.commons.length > 8
+      ? `<span class="history-more">+${item.commons.length-8} más</span>` : '';
+    return `
+      <div class="history-item" id="hitem-${item.id}">
+        <span class="history-num">#${history.length - i}</span>
+        <div class="history-nums">${numTags}</div>
+        <span class="history-arrow">→</span>
+        <div class="history-mcm-box">
+          <div class="history-mcm-label">MCM</div>
+          <div class="history-mcm-val">${item.mcm}</div>
+        </div>
+        <div class="history-commons">${commonChips}${more}</div>
+        <button class="history-item-del" onclick="deleteHistoryItem(${item.id})" title="Eliminar">✕</button>
+      </div>`;
+  }).join('');
+}
+
+function deleteHistoryItem(id) {
+  history = history.filter(h => h.id !== id);
+  renderHistory();
+}
+
+function clearHistory() {
+  history = [];
+  renderHistory();
 }
 
 function resetAll() {
